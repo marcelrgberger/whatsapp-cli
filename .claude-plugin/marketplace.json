@@ -1,0 +1,12 @@
+{
+  "name": "whatsapp-cli",
+  "owner": { "name": "Marcel R. G. Berger" },
+  "metadata": { "version": "1.0.0", "description": "WhatsApp CLI — Control WhatsApp from Claude Code" },
+  "plugins": [{
+    "name": "whatsapp-cli",
+    "source": "./",
+    "description": "Read chats, send messages, monitor conversations, auto-reply, and export WhatsApp data via /whatsapp slash command.",
+    "version": "1.0.0",
+    "author": { "name": "Marcel R. G. Berger" }
+  }]
+}
