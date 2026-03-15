@@ -1361,6 +1361,36 @@ def message_send(ctx, name_or_phone, text):
     _SKIN.success(f"Message sent to {name_or_phone}")
 
 
+@message.command("send-file")
+@click.argument("name_or_phone")
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option("--caption", default="", help="Caption for the file.")
+@click.pass_context
+def message_send_file(ctx, name_or_phone, file_path, caption):
+    """Send a file (image/video/document) to a contact or group."""
+    from whatsapp_cli.utils.wa_backend import send_file as _backend_send_file
+
+    # Resolve name to JID if needed
+    target = name_or_phone
+    jid = _resolve_jid(name_or_phone)
+    if jid:
+        target = jid
+
+    abs_path = os.path.abspath(os.path.expanduser(file_path))
+    result, err = _safe_run(_backend_send_file, target, abs_path, caption)
+    if err:
+        _output(ctx, {"error": f"Failed to send file: {err}"})
+        return
+
+    state = ctx.ensure_object(SessionState)
+    if state.json_mode:
+        _output(ctx, {"sent": True, "to": name_or_phone,
+                       "file_path": abs_path, "caption": caption})
+        return
+
+    _SKIN.success(f"File sent to {name_or_phone}: {os.path.basename(abs_path)}")
+
+
 @message.command("count")
 @click.option("--chat", "chat_name", default=None,
               help="Count messages in a specific chat.")
@@ -1900,6 +1930,173 @@ def export_media(ctx, name_or_jid, output_dir):
 
 
 # ===========================================================================
+# ui group — UI automation via System Events
+# ===========================================================================
+
+@cli.group()
+@click.pass_context
+def ui(ctx):
+    """UI automation operations (System Events)."""
+    pass
+
+
+@ui.command("navigate")
+@click.argument("view", type=click.Choice(
+    ["chats", "calls", "updates", "archived", "starred", "settings", "profile"],
+    case_sensitive=False,
+))
+@click.pass_context
+def ui_navigate(ctx, view):
+    """Navigate to a WhatsApp view (chats/calls/updates/archived/starred/settings/profile)."""
+    from whatsapp_cli.utils.wa_backend import navigate_view
+
+    result, err = _safe_run(navigate_view, view)
+    if err:
+        _output(ctx, {"error": f"Failed to navigate: {err}"})
+        return
+
+    state = ctx.ensure_object(SessionState)
+    if state.json_mode:
+        _output(ctx, {"navigated": True, "view": view})
+        return
+
+    _SKIN.success(f"Navigated to {view.title()}")
+
+
+@ui.command("voice-call")
+@click.argument("name_or_phone")
+@click.pass_context
+def ui_voice_call(ctx, name_or_phone):
+    """Start a voice call with a contact or group."""
+    from whatsapp_cli.utils.wa_backend import start_voice_call
+
+    target = name_or_phone
+    jid = _resolve_jid(name_or_phone)
+    if jid:
+        target = jid
+
+    result, err = _safe_run(start_voice_call, target)
+    if err:
+        _output(ctx, {"error": f"Failed to start voice call: {err}"})
+        return
+
+    state = ctx.ensure_object(SessionState)
+    if state.json_mode:
+        _output(ctx, {"calling": True, "type": "voice", "to": name_or_phone})
+        return
+
+    _SKIN.success(f"Voice call started with {name_or_phone}")
+
+
+@ui.command("video-call")
+@click.argument("name_or_phone")
+@click.pass_context
+def ui_video_call(ctx, name_or_phone):
+    """Start a video call with a contact or group."""
+    from whatsapp_cli.utils.wa_backend import start_video_call
+
+    target = name_or_phone
+    jid = _resolve_jid(name_or_phone)
+    if jid:
+        target = jid
+
+    result, err = _safe_run(start_video_call, target)
+    if err:
+        _output(ctx, {"error": f"Failed to start video call: {err}"})
+        return
+
+    state = ctx.ensure_object(SessionState)
+    if state.json_mode:
+        _output(ctx, {"calling": True, "type": "video", "to": name_or_phone})
+        return
+
+    _SKIN.success(f"Video call started with {name_or_phone}")
+
+
+@ui.command("new-chat")
+@click.pass_context
+def ui_new_chat(ctx):
+    """Open the New Chat dialog."""
+    from whatsapp_cli.utils.wa_backend import open_new_chat
+
+    result, err = _safe_run(open_new_chat)
+    if err:
+        _output(ctx, {"error": f"Failed to open new chat: {err}"})
+        return
+
+    state = ctx.ensure_object(SessionState)
+    if state.json_mode:
+        _output(ctx, {"opened": True, "dialog": "new_chat"})
+        return
+
+    _SKIN.success("New Chat dialog opened")
+
+
+@ui.command("new-group")
+@click.pass_context
+def ui_new_group(ctx):
+    """Open the New Group dialog."""
+    from whatsapp_cli.utils.wa_backend import open_new_group
+
+    result, err = _safe_run(open_new_group)
+    if err:
+        _output(ctx, {"error": f"Failed to open new group: {err}"})
+        return
+
+    state = ctx.ensure_object(SessionState)
+    if state.json_mode:
+        _output(ctx, {"opened": True, "dialog": "new_group"})
+        return
+
+    _SKIN.success("New Group dialog opened")
+
+
+@ui.command("search")
+@click.argument("query")
+@click.pass_context
+def ui_search(ctx, query):
+    """Search in WhatsApp UI (Cmd+F)."""
+    from whatsapp_cli.utils.wa_backend import search_ui
+
+    result, err = _safe_run(search_ui, query)
+    if err:
+        _output(ctx, {"error": f"Failed to search: {err}"})
+        return
+
+    state = ctx.ensure_object(SessionState)
+    if state.json_mode:
+        _output(ctx, {"searching": True, "query": query})
+        return
+
+    _SKIN.success(f"Searching for '{query}'")
+
+
+@ui.command("contact-info")
+@click.argument("name_or_phone")
+@click.pass_context
+def ui_contact_info(ctx, name_or_phone):
+    """Open contact or group info panel."""
+    from whatsapp_cli.utils.wa_backend import open_contact_info
+
+    target = name_or_phone
+    jid = _resolve_jid(name_or_phone)
+    if jid:
+        target = jid
+
+    result, err = _safe_run(open_contact_info, target)
+    if err:
+        _output(ctx, {"error": f"Failed to open contact info: {err}"})
+        return
+
+    state = ctx.ensure_object(SessionState)
+    if state.json_mode:
+        _output(ctx, {"opened": True, "contact": name_or_phone})
+        return
+
+    _SKIN.success(f"Contact info opened for {name_or_phone}")
+
+
+# ===========================================================================
 # session group
 # ===========================================================================
 
@@ -1985,6 +2182,7 @@ _REPL_HELP = {
     "message starred":      "Get starred messages [--chat NAME]",
     "message media":        "Get media messages <name_or_jid> [--limit N]",
     "message send":         "Send message <name_or_phone> <text>",
+    "message send-file":    "Send file <name_or_phone> <file_path> [--caption TEXT]",
     "message count":        "Count messages [--chat NAME]",
     # contact
     "contact list":         "List contacts",
@@ -2003,6 +2201,14 @@ _REPL_HELP = {
     # export
     "export chat":          "Export chat <name_or_jid> <output> [--format txt/json/csv]",
     "export media":         "Export media <name_or_jid> <output_dir>",
+    # ui
+    "ui navigate":          "Navigate view <chats/calls/updates/archived/starred/settings/profile>",
+    "ui voice-call":        "Start voice call <name_or_phone>",
+    "ui video-call":        "Start video call <name_or_phone>",
+    "ui new-chat":          "Open new chat dialog",
+    "ui new-group":         "Open new group dialog",
+    "ui search":            "Search in WhatsApp UI <query>",
+    "ui contact-info":      "Open contact/group info <name_or_phone>",
     # session
     "session status":       "Show session status",
     # misc

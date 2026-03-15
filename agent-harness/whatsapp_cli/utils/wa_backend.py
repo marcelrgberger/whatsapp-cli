@@ -313,3 +313,368 @@ def _press_enter() -> None:
     _run_applescript(
         'tell application "System Events" to keystroke return'
     )
+
+
+# ---------------------------------------------------------------------------
+# Shared chat-opening helper
+# ---------------------------------------------------------------------------
+
+def _open_chat(phone_or_jid: str) -> None:
+    """Open a WhatsApp chat by phone number or JID.
+
+    For group JIDs (ending in @g.us): uses whatsapp://chat?jid=...
+    For individual JIDs or phone numbers: uses whatsapp://send?phone=...
+
+    Args:
+        phone_or_jid: Phone number, JID (user@s.whatsapp.net or group@g.us).
+
+    Raises:
+        RuntimeError: If WhatsApp is not installed or fails to launch.
+        ValueError: If a phone number cannot be extracted.
+    """
+    ensure_whatsapp_running()
+
+    is_group = "@g.us" in phone_or_jid
+
+    if is_group:
+        jid = phone_or_jid
+        subprocess.run(
+            ["open", f"whatsapp://chat?jid={jid}"],
+            check=True, timeout=10,
+        )
+    else:
+        phone = phone_or_jid
+        if "@" in phone:
+            phone = phone.split("@")[0]
+        phone = re.sub(r"[^\d]", "", phone)
+        if not phone:
+            raise ValueError(f"Could not extract phone number from: {phone_or_jid}")
+        subprocess.run(
+            ["open", f"whatsapp://send?phone={phone}"],
+            check=True, timeout=10,
+        )
+
+    time.sleep(2.0)
+    _activate_whatsapp()
+    time.sleep(0.5)
+
+
+# ---------------------------------------------------------------------------
+# Image extension set (for clipboard handling)
+# ---------------------------------------------------------------------------
+
+_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".tiff", ".tif", ".bmp"}
+
+
+# ---------------------------------------------------------------------------
+# Send file via UI automation
+# ---------------------------------------------------------------------------
+
+def send_file(phone_or_jid: str, file_path: str, caption: str = "") -> bool:
+    """Send a file (image/video/document) via UI automation.
+
+    Opens the chat, copies the file to the clipboard using the appropriate
+    method (TIFF picture for images, Finder alias for other files), pastes
+    into WhatsApp, optionally types a caption, and presses Enter to send.
+
+    Args:
+        phone_or_jid: Phone number, JID, or group JID.
+        file_path: Absolute path to the file to send.
+        caption: Optional caption text for the file.
+
+    Returns:
+        bool: True if the send sequence completed without errors.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        RuntimeError: If WhatsApp is not available or the send fails.
+        ValueError: If the recipient cannot be resolved.
+    """
+    abs_path = os.path.abspath(os.path.expanduser(file_path))
+    if not os.path.isfile(abs_path):
+        raise FileNotFoundError(f"File not found: {abs_path}")
+
+    _open_chat(phone_or_jid)
+
+    # Determine clipboard method based on file extension
+    ext = os.path.splitext(abs_path)[1].lower()
+    is_image = ext in _IMAGE_EXTENSIONS
+
+    if is_image:
+        # Copy image data as TIFF picture to clipboard
+        _run_applescript(
+            f'set the clipboard to '
+            f'(read (POSIX file "{abs_path}") as TIFF picture)'
+        )
+    else:
+        # Copy file reference via Finder to clipboard
+        _run_applescript(
+            f'tell application "Finder" to set the clipboard to '
+            f'(POSIX file "{abs_path}" as alias)'
+        )
+
+    time.sleep(0.5)
+
+    # Paste into WhatsApp
+    _run_applescript(
+        'tell application "System Events"\n'
+        '  tell process "WhatsApp"\n'
+        '    set frontmost to true\n'
+        '    delay 0.3\n'
+        '    keystroke "v" using command down\n'
+        '  end tell\n'
+        'end tell'
+    )
+
+    # Wait for WhatsApp to process the paste (Electron UI is slow)
+    time.sleep(2.0)
+
+    # Type caption if provided
+    if caption:
+        escaped_caption = (
+            caption.replace("\\", "\\\\")
+            .replace('"', '\\"')
+            .replace("'", "'\\''")
+        )
+        _run_applescript(
+            f'tell application "System Events"\n'
+            f'  tell process "WhatsApp"\n'
+            f'    keystroke "{escaped_caption}"\n'
+            f'  end tell\n'
+            f'end tell'
+        )
+        time.sleep(0.3)
+
+    # Press Enter to send
+    _press_enter()
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Navigate WhatsApp views via menu
+# ---------------------------------------------------------------------------
+
+_VALID_VIEWS = {
+    "chats": "Chats",
+    "calls": "Calls",
+    "updates": "Updates",
+    "archived": "Archived",
+    "starred": "Starred",
+    "settings": "Settings",
+    "profile": "Profile",
+}
+
+
+def navigate_view(view: str) -> None:
+    """Navigate to a WhatsApp view via the View menu.
+
+    Args:
+        view: One of: chats, calls, updates, archived, starred, settings, profile.
+
+    Raises:
+        ValueError: If the view name is not recognized.
+        RuntimeError: If WhatsApp is not available or the menu click fails.
+    """
+    view_lower = view.lower().strip()
+    if view_lower not in _VALID_VIEWS:
+        raise ValueError(
+            f"Unknown view: '{view}'. "
+            f"Valid views: {', '.join(sorted(_VALID_VIEWS.keys()))}"
+        )
+
+    menu_item = _VALID_VIEWS[view_lower]
+    ensure_whatsapp_running()
+    _activate_whatsapp()
+    time.sleep(0.5)
+
+    # The menu items in WhatsApp have invisible Unicode markers (LRM \u200e)
+    _run_applescript(
+        f'tell application "System Events"\n'
+        f'  tell process "WhatsApp"\n'
+        f'    set frontmost to true\n'
+        f'    delay 0.3\n'
+        f'    click menu item "\u200e{menu_item}" of menu "View" '
+        f'of menu bar item "View" of menu bar 1\n'
+        f'  end tell\n'
+        f'end tell'
+    )
+
+
+# ---------------------------------------------------------------------------
+# Voice and video calls via Chat menu
+# ---------------------------------------------------------------------------
+
+def start_voice_call(phone_or_jid: str) -> bool:
+    """Start a voice call by opening the chat and clicking Chat > Voice Call.
+
+    Args:
+        phone_or_jid: Phone number, JID, or group JID.
+
+    Returns:
+        bool: True if the call initiation sequence completed.
+
+    Raises:
+        RuntimeError: If WhatsApp is not available or the menu click fails.
+    """
+    _open_chat(phone_or_jid)
+    time.sleep(0.5)
+
+    _run_applescript(
+        'tell application "System Events"\n'
+        '  tell process "WhatsApp"\n'
+        '    set frontmost to true\n'
+        '    delay 0.3\n'
+        '    click menu item "\u200eVoice Call" of menu "\u200eChat" '
+        'of menu bar item "\u200eChat" of menu bar 1\n'
+        '  end tell\n'
+        'end tell'
+    )
+    return True
+
+
+def start_video_call(phone_or_jid: str) -> bool:
+    """Start a video call by opening the chat and clicking Chat > Video Call.
+
+    Args:
+        phone_or_jid: Phone number, JID, or group JID.
+
+    Returns:
+        bool: True if the call initiation sequence completed.
+
+    Raises:
+        RuntimeError: If WhatsApp is not available or the menu click fails.
+    """
+    _open_chat(phone_or_jid)
+    time.sleep(0.5)
+
+    _run_applescript(
+        'tell application "System Events"\n'
+        '  tell process "WhatsApp"\n'
+        '    set frontmost to true\n'
+        '    delay 0.3\n'
+        '    click menu item "\u200eVideo Call" of menu "\u200eChat" '
+        'of menu bar item "\u200eChat" of menu bar 1\n'
+        '  end tell\n'
+        'end tell'
+    )
+    return True
+
+
+# ---------------------------------------------------------------------------
+# New Chat / New Group via File menu
+# ---------------------------------------------------------------------------
+
+def open_new_chat() -> None:
+    """Open the New Chat dialog via File > New Chat.
+
+    Raises:
+        RuntimeError: If WhatsApp is not available or the menu click fails.
+    """
+    ensure_whatsapp_running()
+    _activate_whatsapp()
+    time.sleep(0.5)
+
+    _run_applescript(
+        'tell application "System Events"\n'
+        '  tell process "WhatsApp"\n'
+        '    set frontmost to true\n'
+        '    delay 0.3\n'
+        '    click menu item "\u200eNew Chat" of menu "File" '
+        'of menu bar item "File" of menu bar 1\n'
+        '  end tell\n'
+        'end tell'
+    )
+
+
+def open_new_group() -> None:
+    """Open the New Group dialog via File > New group.
+
+    Raises:
+        RuntimeError: If WhatsApp is not available or the menu click fails.
+    """
+    ensure_whatsapp_running()
+    _activate_whatsapp()
+    time.sleep(0.5)
+
+    _run_applescript(
+        'tell application "System Events"\n'
+        '  tell process "WhatsApp"\n'
+        '    set frontmost to true\n'
+        '    delay 0.3\n'
+        '    click menu item "\u200eNew group" of menu "File" '
+        'of menu bar item "File" of menu bar 1\n'
+        '  end tell\n'
+        'end tell'
+    )
+
+
+# ---------------------------------------------------------------------------
+# Search via Cmd+F
+# ---------------------------------------------------------------------------
+
+def search_ui(query: str) -> None:
+    """Open WhatsApp search and type a query.
+
+    Uses Cmd+F to open the search bar, then types the query string.
+
+    Args:
+        query: The search text to type.
+
+    Raises:
+        RuntimeError: If WhatsApp is not available or the keystroke fails.
+    """
+    ensure_whatsapp_running()
+    _activate_whatsapp()
+    time.sleep(0.5)
+
+    escaped_query = (
+        query.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("'", "'\\''")
+    )
+
+    _run_applescript(
+        f'tell application "System Events"\n'
+        f'  tell process "WhatsApp"\n'
+        f'    set frontmost to true\n'
+        f'    delay 0.3\n'
+        f'    keystroke "f" using command down\n'
+        f'    delay 0.5\n'
+        f'    keystroke "{escaped_query}"\n'
+        f'  end tell\n'
+        f'end tell'
+    )
+
+
+# ---------------------------------------------------------------------------
+# Open contact/group info via Chat menu
+# ---------------------------------------------------------------------------
+
+def open_contact_info(phone_or_jid: str) -> None:
+    """Open the contact or group info panel.
+
+    Opens the chat first, then clicks Chat > Contact Info (or Group Info).
+
+    Args:
+        phone_or_jid: Phone number, JID, or group JID.
+
+    Raises:
+        RuntimeError: If WhatsApp is not available or the menu click fails.
+    """
+    _open_chat(phone_or_jid)
+    time.sleep(0.5)
+
+    # The menu item is "Contact Info" for individuals, "Group Info" for groups
+    is_group = "@g.us" in phone_or_jid
+    menu_label = "Group Info" if is_group else "Contact Info"
+
+    _run_applescript(
+        f'tell application "System Events"\n'
+        f'  tell process "WhatsApp"\n'
+        f'    set frontmost to true\n'
+        f'    delay 0.3\n'
+        f'    click menu item "\u200e{menu_label}" of menu "\u200eChat" '
+        f'of menu bar item "\u200eChat" of menu bar 1\n'
+        f'  end tell\n'
+        f'end tell'
+    )

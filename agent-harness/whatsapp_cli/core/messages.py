@@ -10,6 +10,7 @@ from whatsapp_cli.utils.wa_backend import (
     _apple_ts_to_datetime,
     _datetime_to_apple_ts,
     send_via_ui,
+    send_file as _backend_send_file,
 )
 
 
@@ -379,3 +380,52 @@ def _resolve_jid_for_send(name: str) -> str | None:
         return row["ZCONTACTJID"] if row else None
     finally:
         db.close()
+
+
+def send_file(phone_or_name: str, file_path: str, caption: str = "") -> dict:
+    """Send a file (image/video/document) to a contact or group.
+
+    Resolves names to JIDs via the chat database, validates the file exists,
+    then uses clipboard + UI automation to send.
+
+    Args:
+        phone_or_name: Phone number (with or without +), JID, or contact/group name.
+        file_path: Path to the file to send.
+        caption: Optional caption text for the file.
+
+    Returns:
+        dict: Result with keys: sent (bool), to, file_path, caption.
+
+    Raises:
+        ValueError: If the recipient could not be resolved.
+        FileNotFoundError: If the file does not exist.
+        RuntimeError: If WhatsApp is not available or the send fails.
+    """
+    import os
+    import re
+
+    # Validate file exists
+    abs_path = os.path.abspath(os.path.expanduser(file_path))
+    if not os.path.isfile(abs_path):
+        raise FileNotFoundError(f"File not found: {abs_path}")
+
+    target = phone_or_name
+
+    # If it looks like a name (no digits or @), resolve to JID first
+    if not re.search(r"[\d@]", target):
+        jid = _resolve_jid(target)
+        if jid is None:
+            raise ValueError(
+                f"Could not find a chat for '{phone_or_name}'. "
+                "Please use a phone number or JID."
+            )
+        target = jid
+
+    _backend_send_file(target, abs_path, caption=caption)
+
+    return {
+        "sent": True,
+        "to": phone_or_name,
+        "file_path": abs_path,
+        "caption": caption,
+    }
