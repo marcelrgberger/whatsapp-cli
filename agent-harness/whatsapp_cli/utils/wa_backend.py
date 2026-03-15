@@ -239,20 +239,16 @@ def send_url_scheme(phone: str, text: str) -> None:
 # ---------------------------------------------------------------------------
 
 def send_via_ui(phone_or_jid: str, text: str, confirm: bool = True) -> bool:
-    """Send a message via UI automation: URL scheme + System Events keystroke.
+    """Send a message via UI automation.
 
-    Flow:
-      1. Ensure WhatsApp is running.
-      2. Open chat via URL scheme with the message text pre-filled.
-      3. Wait for WhatsApp to become active and the chat to open.
-      4. Use System Events to press Enter to send the message.
+    For individual chats: URL scheme + Enter keystroke.
+    For group chats: open group via JID URL, then type + Enter via System Events.
 
     Args:
-        phone_or_jid: Phone number (digits, with or without +) or a JID.
-            If a JID is provided, the phone portion is extracted.
+        phone_or_jid: Phone number, JID (user@s.whatsapp.net or group@g.us),
+            or contact name.
         text: The message to send.
-        confirm: If True (default), log a confirmation. Set to False for
-            automated/batch sending (use with caution).
+        confirm: If True (default), log a confirmation.
 
     Returns:
         bool: True if the send sequence completed without errors.
@@ -260,31 +256,47 @@ def send_via_ui(phone_or_jid: str, text: str, confirm: bool = True) -> bool:
     Raises:
         RuntimeError: If WhatsApp is not installed or the send fails.
     """
-    # Extract phone number from JID if needed
-    phone = phone_or_jid
-    if "@" in phone:
-        phone = phone.split("@")[0]
-
-    # Remove any non-digit characters
-    phone = re.sub(r"[^\d]", "", phone)
-
-    if not phone:
-        raise ValueError(f"Could not extract phone number from: {phone_or_jid}")
-
-    # Step 1: Ensure WhatsApp is running
     ensure_whatsapp_running()
 
-    # Step 2: Open chat with pre-filled text
-    send_url_scheme(phone, text)
+    is_group = "@g.us" in phone_or_jid
 
-    # Step 3: Wait for WhatsApp to become the active window
-    time.sleep(2.0)
+    if is_group:
+        # Groups: open chat via JID URL, then type message via System Events
+        jid = phone_or_jid
+        subprocess.run(
+            ["open", f"whatsapp://chat?jid={jid}"],
+            check=True, timeout=10,
+        )
+        time.sleep(2.0)
+        _activate_whatsapp()
+        time.sleep(0.5)
+        # Type the message and press Enter
+        escaped = text.replace("\\", "\\\\").replace('"', '\\"').replace("'", "'\\''")
+        _run_applescript(
+            f'tell application "System Events"\n'
+            f'  tell process "WhatsApp"\n'
+            f'    set frontmost to true\n'
+            f'    delay 0.3\n'
+            f'    keystroke "{escaped}"\n'
+            f'    delay 0.3\n'
+            f'    keystroke return\n'
+            f'  end tell\n'
+            f'end tell'
+        )
+    else:
+        # Individual chats: URL scheme pre-fills text, then press Enter
+        phone = phone_or_jid
+        if "@" in phone:
+            phone = phone.split("@")[0]
+        phone = re.sub(r"[^\d]", "", phone)
+        if not phone:
+            raise ValueError(f"Could not extract phone number from: {phone_or_jid}")
 
-    # Step 4: Activate WhatsApp and press Enter via System Events
-    _activate_whatsapp()
-    time.sleep(0.5)
-
-    _press_enter()
+        send_url_scheme(phone, text)
+        time.sleep(2.0)
+        _activate_whatsapp()
+        time.sleep(0.5)
+        _press_enter()
 
     return True
 

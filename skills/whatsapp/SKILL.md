@@ -1,25 +1,17 @@
-# WhatsApp Skill
+---
+name: whatsapp
+description: >-
+  Control WhatsApp from Claude. Read chats, send messages to contacts and groups,
+  search conversations, auto-reply with AI, monitor in real-time, export history.
+  Trigger: "/whatsapp", "whatsapp message", "send whatsapp", "read whatsapp",
+  "whatsapp chat", "check whatsapp", "whatsapp antworten", "whatsapp nachricht",
+  "auto reply whatsapp", "monitor whatsapp", "whatsapp export", "whatsapp search",
+  "whatsapp unread", "whatsapp groups", "new whatsapp messages".
+  Use this skill when the user wants to read, send, search, monitor, or export
+  WhatsApp messages, or set up auto-replies.
+---
 
-## Description
-
-Natural language WhatsApp control from Claude Code. Read chats, send messages, search conversations, monitor contacts, set up auto-replies, and export chat history.
-
-## Triggers
-
-- "/whatsapp"
-- "whatsapp message"
-- "send whatsapp"
-- "read whatsapp"
-- "whatsapp chat"
-- "check whatsapp"
-- "whatsapp antworten"
-- "whatsapp nachricht"
-- "auto reply whatsapp"
-- "monitor whatsapp"
-- "whatsapp export"
-- "whatsapp search"
-- "whatsapp unread"
-- "whatsapp groups"
+# WhatsApp CLI Skill
 
 ## Instructions
 
