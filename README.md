@@ -159,6 +159,23 @@ This will:
 
 Works with both individual chats and group chats. Run multiple auto-reply bots in parallel for different chats.
 
+### Data Flow
+
+```mermaid
+graph LR
+    U[User / Claude] -->|/whatsapp command| CLI[whatsapp-cli]
+    CLI -->|Read-only| DB[(ChatStorage.sqlite)]
+    CLI -->|URL Scheme| WA[WhatsApp App]
+    CLI -->|System Events| UI[WhatsApp UI]
+
+    subgraph Auto-Reply
+        CLI -->|Monitor| DB
+        DB -->|New message| Claude[claude -p]
+        Claude -->|Response| CLI
+        CLI -->|Send| WA
+    end
+```
+
 ## Architecture
 
 ```
