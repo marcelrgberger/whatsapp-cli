@@ -1,78 +1,51 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+release.properties
+.flattened-pom.xml
 
-# C extensions
-*.so
+# Eclipse
+.project
+.classpath
+.settings/
+bin/
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+# IntelliJ
+.idea
+*.ipr
+*.iml
+*.iws
 
-# PyInstaller
-*.manifest
-*.spec
+# NetBeans
+nb-configuration.xml
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+# Visual Studio Code
+.vscode
+.factorypath
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
+# OSX
+.DS_Store
 
-# Translations
-*.mo
-*.pot
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# IDE
-.vscode/
-.idea/
+# Vim
 *.swp
 *.swo
-*~
 
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-._*
+# patch
+*.orig
+*.rej
 
-# Thumbnails
-Thumbs.db
+# Local environment
+.env
+
+# Claude Code
+.claude/
+claude.md
+CLAUDE.md
+
+# Plugin directory
+/.quarkus/cli/plugins/
+
+# TLS Certificates
+.certs/
